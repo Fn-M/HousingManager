@@ -3,11 +3,6 @@ import axios from 'axios'
 const PROD_BASE_URL = import.meta.env.VITE_API_BASE_URL
 const API_KEY = import.meta.env.VITE_API_KEY
 
-console.log('🔍 API Configuration:')
-console.log('- Base URL:', PROD_BASE_URL)
-console.log('- API Key:', API_KEY ? '✅ Set' : '❌ Missing')
-console.log('- Environment:', import.meta.env.DEV ? 'Development' : 'Production')
-
 // In dev, use the Vite proxy to bypass CORS; in prod, hit the real URL
 const baseURL = import.meta.env.DEV ? '/api' : PROD_BASE_URL
 
@@ -19,33 +14,11 @@ export const api = axios.create({
   },
 })
 
-// Log all requests
-api.interceptors.request.use(
-  (config) => {
-    console.log('📤 Request:', config.method?.toUpperCase(), config.url)
-    return config
-  },
-  (err) => {
-    console.error('❌ Request Error:', err)
-    return Promise.reject(err)
-  }
-)
-
 // Log failed responses
 api.interceptors.response.use(
-  (res) => {
-    console.log('📥 Response:', res.status, res.config.url)
-    return res
-  },
+  (res) => res,
   (err) => {
-    console.error('❌ API Error:', {
-      status: err.response?.status,
-      statusText: err.response?.statusText,
-      data: err.response?.data,
-      headers: err.response?.headers,
-      url: err.config?.url,
-      method: err.config?.method,
-    })
+    console.error('API Error:', err.response?.status, err.response?.data)
     return Promise.reject(err)
   }
 )
