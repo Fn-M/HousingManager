@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from 'react'
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Ads } from './services/api'
 
@@ -25,28 +25,6 @@ export default function PropertyDetails({ onUpdate }) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isExpanded, setIsExpanded] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true)
-        const data = await Ads.get(id)
-        setProperty(data)
-        setStatusValue(data.Status || data.status || '')
-
-        const pics = await Ads.getPictures(id)
-        setPictures(pics)
-
-        const commentsData = await Ads.getComments(id)
-        setComments(Array.isArray(commentsData) ? commentsData : [])
-      } catch (err) {
-        setError(err.message || 'Failed to load property details')
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchData()
-  }, [id])
 
   const sortedPictures = useMemo(() => {
     const sorted = [...pictures].sort((a, b) => {
@@ -86,6 +64,52 @@ export default function PropertyDetails({ onUpdate }) {
     
     return sorted
   }, [pictures, property])
+
+  const handlePrevImage = useCallback(() => {
+    setCurrentImageIndex((prev) => (prev === 0 ? sortedPictures.length - 1 : prev - 1))
+  }, [sortedPictures.length])
+
+  const handleNextImage = useCallback(() => {
+    setCurrentImageIndex((prev) => (prev === sortedPictures.length - 1 ? 0 : prev + 1))
+  }, [sortedPictures.length])
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        const data = await Ads.get(id)
+        setProperty(data)
+        setStatusValue(data.Status || data.status || '')
+
+        const pics = await Ads.getPictures(id)
+        setPictures(pics)
+
+        const commentsData = await Ads.getComments(id)
+        setComments(Array.isArray(commentsData) ? commentsData : [])
+      } catch (err) {
+        setError(err.message || 'Failed to load property details')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [id])
+
+  // Adiciona listener para teclas de seta
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowLeft') {
+        handlePrevImage()
+      } else if (e.key === 'ArrowRight') {
+        handleNextImage()
+      } else if (e.key === 'Escape' && isExpanded) {
+        setIsExpanded(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handlePrevImage, handleNextImage, isExpanded])
 
   const handleStatusSave = async () => {
     try {
@@ -191,14 +215,6 @@ export default function PropertyDetails({ onUpdate }) {
     }
   }
 
-  const handlePrevImage = () => {
-    setCurrentImageIndex((prev) => (prev === 0 ? sortedPictures.length - 1 : prev - 1))
-  }
-
-  const handleNextImage = () => {
-    setCurrentImageIndex((prev) => (prev === sortedPictures.length - 1 ? 0 : prev + 1))
-  }
-
   const toggleExpand = () => {
     setIsExpanded(!isExpanded)
   }
@@ -287,12 +303,59 @@ export default function PropertyDetails({ onUpdate }) {
 
           {sortedPictures.length > 0 && (
             <div className="mb-6 relative group">
-              <div className={`relative ${isExpanded ? 'fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center' : ''}`}>
-                <div className={`relative ${isExpanded ? 'max-w-5xl max-h-screen' : 'w-full h-96'}`}>
+              {isExpanded && (
+                <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
+                  <div className="relative w-full h-full flex items-center justify-center p-4">
+                    <img
+                      src={sortedPictures[currentImageIndex].PictureUrl}
+                      alt={`Property ${currentImageIndex + 1}`}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                    
+                    <button
+                      onClick={handlePrevImage}
+                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-70 text-white p-4 rounded-full hover:bg-opacity-90 text-3xl w-14 h-14 flex items-center justify-center"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      onClick={handleNextImage}
+                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-70 text-white p-4 rounded-full hover:bg-opacity-90 text-3xl w-14 h-14 flex items-center justify-center"
+                    >
+                      ›
+                    </button>
+
+                    <button
+                      onClick={toggleExpand}
+                      className="absolute top-4 right-4 bg-black bg-opacity-70 text-white p-3 rounded-full hover:bg-opacity-90 text-2xl w-12 h-12 flex items-center justify-center"
+                      title="Exit fullscreen"
+                    >
+                      ✕
+                    </button>
+
+                    {!sortedPictures[currentImageIndex].isFirstPhoto && (
+                      <button
+                        onClick={() => handleDeletePicture(sortedPictures[currentImageIndex].PictureId)}
+                        disabled={deletingPictureId === sortedPictures[currentImageIndex].PictureId}
+                        className="absolute bottom-4 right-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50"
+                      >
+                        {deletingPictureId === sortedPictures[currentImageIndex].PictureId ? 'Deleting...' : 'Delete Photo'}
+                      </button>
+                    )}
+
+                    <div className="absolute bottom-4 left-4 bg-black bg-opacity-70 text-white px-4 py-2 rounded text-lg">
+                      {currentImageIndex + 1} / {sortedPictures.length}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!isExpanded && (
+                <div className="relative w-full h-96">
                   <img
                     src={sortedPictures[currentImageIndex].PictureUrl}
                     alt={`Property ${currentImageIndex + 1}`}
-                    className={`${isExpanded ? 'max-w-full max-h-screen object-contain' : 'w-full h-96 object-cover rounded-lg shadow-lg'}`}
+                    className="w-full h-96 object-cover rounded-lg shadow-lg"
                   />
                   
                   <button
@@ -311,9 +374,9 @@ export default function PropertyDetails({ onUpdate }) {
                   <button
                     onClick={toggleExpand}
                     className="absolute top-2 right-2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-75"
-                    title={isExpanded ? 'Exit fullscreen' : 'View fullscreen'}
+                    title="View fullscreen"
                   >
-                    {isExpanded ? '✕' : '⛶'}
+                    ⛶
                   </button>
 
                   {!sortedPictures[currentImageIndex].isFirstPhoto && (
@@ -330,7 +393,7 @@ export default function PropertyDetails({ onUpdate }) {
                     {currentImageIndex + 1} / {sortedPictures.length}
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex gap-2 mt-4 overflow-x-auto">
                 {sortedPictures.map((pic, idx) => (
