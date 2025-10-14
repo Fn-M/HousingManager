@@ -125,7 +125,110 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={
-        user ? <Navigate to="/main" replace /> : <Login setUser={setUser} />
+        user ? (
+          <div className="min-h-screen bg-gray-100">
+            <header className="bg-blue-600 text-white p-4 shadow-md">
+              <div className="max-w-7xl mx-auto flex items-center justify-between">
+                <h1 className="text-3xl font-bold">Housing Manager</h1>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm">Welcome, {user}</span>
+                  <button onClick={handleLogout} className="px-4 py-2 bg-red-600 rounded hover:bg-red-700 transition">
+                    Logout
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              {loading && (
+                <div className="text-gray-600">Loading properties…</div>
+              )}
+              {error && (
+                <div className="text-red-700 bg-red-50 border border-red-200 p-3 rounded">{error}</div>
+              )}
+              {!loading && !error && (
+                <div className="overflow-x-auto bg-white border rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        {columns.map(col => (
+                          <th
+                            key={col.key}
+                            scope="col"
+                            className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${
+                              col.sortable ? 'cursor-pointer select-none text-blue-700 hover:text-blue-900' : 'text-gray-500'
+                            }`}
+                            onClick={col.sortable ? () => handleSort(col.key) : undefined}
+                          >
+                            {col.label}
+                            {col.sortable && (
+                              <span className="ml-1 text-blue-700 align-middle">
+                                {sortBy === col.key ? (sortOrder === 'asc' ? '▲' : '▼') : '⇅'}
+                              </span>
+                            )}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {sortedAds.map((p) => (
+                        <tr 
+                          key={p.id} 
+                          onClick={() => navigate(`/details/${p.id}`)}
+                          className="hover:bg-gray-50 cursor-pointer"
+                        >
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {p.firstPhoto ? (
+                              <div className="w-32 h-32 overflow-hidden rounded shadow flex-shrink-0">
+                                <img src={p.firstPhoto} alt={p.name} className="w-full h-full object-cover" />
+                              </div>
+                            ) : (
+                              <div className="w-32 h-32 bg-gray-200 rounded shadow flex items-center justify-center text-gray-400 text-xs flex-shrink-0">No image</div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="font-medium text-gray-900">
+                              {p.link ? (
+                                <a 
+                                  href={p.link} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {p.name}
+                                </a>
+                              ) : (
+                                <span>{p.name}</span>
+                              )}
+                            </div>
+                            <div className="text-gray-500 text-sm mt-1">{p.id}</div>
+                          </td>
+                          <td className="px-4 py-3 text-gray-700">{p.location}</td>
+                          <td className="px-4 py-3 text-gray-900 font-semibold whitespace-nowrap">€ {p.price?.toLocaleString?.('nl-NL') || p.price}</td>
+                          <td className="px-4 py-3">{p.space}</td>
+                          <td className="px-4 py-3">{p.terrain}</td>
+                          <td className="px-4 py-3">{p.rooms}</td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium border bg-gray-50">
+                              {p.energyClass || '-'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">{p.Status || p.status || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {ads.length === 0 && (
+                    <div className="p-6 text-center text-gray-600">No properties found.</div>
+                  )}
+                </div>
+              )}
+            </main>
+
+            <footer className="py-8 text-center text-sm text-gray-500">&copy; {new Date().getFullYear()} Housing Manager</footer>
+          </div>
+        ) : <Login setUser={setUser} />
       } />
       <Route path="/login" element={<Login setUser={setUser} />} />
       <Route path="/main" element={
