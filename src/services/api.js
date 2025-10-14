@@ -3,7 +3,6 @@ import axios from 'axios'
 const PROD_BASE_URL = import.meta.env.VITE_API_BASE_URL
 const API_KEY = import.meta.env.VITE_API_KEY
 
-// In dev, use the Vite proxy to bypass CORS; in prod, hit the real URL
 const baseURL = import.meta.env.DEV ? '/api' : PROD_BASE_URL
 
 export const api = axios.create({
@@ -14,13 +13,10 @@ export const api = axios.create({
   },
 })
 
-// Log failed responses
+// Remove error logging
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    console.error('API Error:', err.response?.status, err.response?.data)
-    return Promise.reject(err)
-  }
+  (err) => Promise.reject(err)
 )
 
 function parseBody(data) {
@@ -68,7 +64,7 @@ export const Ads = {
       try {
         data = JSON.parse(data.body)
       } catch (err) {
-        console.error('Failed to parse response body:', err)
+        // Silent
       }
     }
     
@@ -94,32 +90,19 @@ export const Ads = {
   },
 
   delete: async (id) => {
-    // 1. Apaga todos os comentários primeiro
     try {
-      await api.delete(`/ads/${id}/comments`, {
-        headers: {
-          'x-api-key': API_KEY
-        }
-      })
+      await api.delete(`/ads/${id}/comments`)
     } catch (err) {
-      console.warn('Failed to delete comments:', err)
-      // Continua mesmo se falhar (pode não haver comments)
+      // Continue
     }
-
-    // 2. Apaga todas as fotos (exceto a primeira)
+    
     try {
-      await Ads.deleteAllPictures(id)
+      await api.delete(`/ads/${id}/pictures`)
     } catch (err) {
-      console.warn('Failed to delete pictures:', err)
+      // Continue
     }
-
-    // 3. Apaga o anúncio
-    const res = await api.delete(`/ads/${id}`, {
-      headers: {
-        'x-api-key': API_KEY
-      }
-    })
-    return res.data
+    
+    await api.delete(`/ads/${id}`)
   },
 
   getPictures: async (adId) => {
