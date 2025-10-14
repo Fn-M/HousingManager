@@ -94,6 +94,26 @@ export const Ads = {
   },
 
   delete: async (id) => {
+    // 1. Apaga todos os comentários primeiro
+    try {
+      await api.delete(`/ads/${id}/comments`, {
+        headers: {
+          'x-api-key': API_KEY
+        }
+      })
+    } catch (err) {
+      console.warn('Failed to delete comments:', err)
+      // Continua mesmo se falhar (pode não haver comments)
+    }
+
+    // 2. Apaga todas as fotos (exceto a primeira)
+    try {
+      await Ads.deleteAllPictures(id)
+    } catch (err) {
+      console.warn('Failed to delete pictures:', err)
+    }
+
+    // 3. Apaga o anúncio
     const res = await api.delete(`/ads/${id}`, {
       headers: {
         'x-api-key': API_KEY
@@ -132,6 +152,15 @@ export const Ads = {
 
   addComment: async (adId, comment) => {
     const res = await api.post(`/ads/${adId}/comments`, comment)
+    return res.data
+  },
+
+  deleteAllComments: async (adId) => {
+    const res = await api.delete(`/ads/${adId}/comments`, {
+      headers: {
+        'x-api-key': API_KEY
+      }
+    })
     return res.data
   }
 }
