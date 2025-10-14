@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { Ads } from './services/api'
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import PropertyDetails from './PropertyDetails'
 import Login from './Login'
 
@@ -116,15 +116,30 @@ export default function App() {
     return children
   }
 
+  const handleLogout = () => {
+    setUser(null)
+    document.cookie = 'user=; Max-Age=0; path=/'
+    window.location.href = '/login'
+  }
+
   return (
     <Routes>
-      <Route path="/login" element={<Login setUser={setUser} />} />
       <Route path="/" element={
+        user ? <Navigate to="/main" replace /> : <Login setUser={setUser} />
+      } />
+      <Route path="/login" element={<Login setUser={setUser} />} />
+      <Route path="/main" element={
         <Protected>
-          <div className="min-h-screen bg-gray-50">
-            <header className="bg-blue-700 border-b shadow">
-              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-between">
-                <h1 className="text-xl sm:text-2xl font-semibold text-white">Housing Manager</h1>
+          <div className="min-h-screen bg-gray-100">
+            <header className="bg-blue-600 text-white p-4 shadow-md">
+              <div className="max-w-7xl mx-auto flex items-center justify-between">
+                <h1 className="text-3xl font-bold">Housing Manager</h1>
+                <div className="flex items-center gap-4">
+                  <span className="text-sm">Welcome, {user}</span>
+                  <button onClick={handleLogout} className="px-4 py-2 bg-red-600 rounded hover:bg-red-700 transition">
+                    Logout
+                  </button>
+                </div>
               </div>
             </header>
 

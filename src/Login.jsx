@@ -16,7 +16,7 @@ export default function Login({ setUser }) {
       setError('')
       document.cookie = `user=${encodeURIComponent(user.name)}; path=/; max-age=86400`
       if (setUser) setUser(user.name)
-      navigate('/')
+      navigate('/main')
     } else {
       setError('Incorrect username or password.')
     }
