@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, Link } from 'react-router-dom'
 import PropertyList from './PropertyList'
 import PropertyDetails from './PropertyDetails'
 import { Ads } from './services/api'
@@ -127,12 +127,141 @@ function App() {
 
 function LoginForm({ onLogin }) {
   const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [isBlocked, setIsBlocked] = useState(false)
+  const [remainingTime, setRemainingTime] = useState(0)
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    if (username.trim()) {
-      onLogin(username.trim())
+  const VALID_USERS = (() => {
+    try {
+      const usersJson = import.meta.env.VITE_USERS
+      if (!usersJson) {
+        console.warn('VITE_USERS not found in environment variables')
+        return []
+      }
+      const users = JSON.parse(usersJson)
+      return Array.isArray(users) ? users : []
+    } catch (err) {
+      console.error('Failed to parse VITE_USERS:', err)
+      return []
     }
+  })()
+
+  const MAX_ATTEMPTS = 5
+  const BLOCK_DURATION = 5 * 60 * 1000 // 5 minutes in milliseconds
+  const STORAGE_KEY = 'login_attempts'
+
+  const getLoginAttempts = () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY)
+      if (!stored) return { count: 0, blockedUntil: null }
+      return JSON.parse(stored)
+    } catch {
+      return { count: 0, blockedUntil: null }
+    }
+  }
+
+  const saveLoginAttempts = (data) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+  }
+
+  const checkIfBlocked = () => {
+    const attempts = getLoginAttempts()
+    
+    if (attempts.blockedUntil) {
+      const now = Date.now()
+      if (now < attempts.blockedUntil) {
+        setIsBlocked(true)
+        setRemainingTime(Math.ceil((attempts.blockedUntil - now) / 1000))
+        return true
+      } else {
+        saveLoginAttempts({ count: 0, blockedUntil: null })
+        setIsBlocked(false)
+        return false
+      }
+    }
+    
+    return false
+  }
+
+  useEffect(() => {
+    checkIfBlocked()
+  }, [])
+
+  useEffect(() => {
+    if (!isBlocked) return
+
+    const interval = setInterval(() => {
+      const attempts = getLoginAttempts()
+      if (!attempts.blockedUntil) {
+        setIsBlocked(false)
+        setRemainingTime(0)
+        return
+      }
+
+      const now = Date.now()
+      const remaining = Math.ceil((attempts.blockedUntil - now) / 1000)
+      
+      if (remaining <= 0) {
+        saveLoginAttempts({ count: 0, blockedUntil: null })
+        setIsBlocked(false)
+        setRemainingTime(0)
+      } else {
+        setRemainingTime(remaining)
+      }
+    }, 1000)
+
+    return () => clearInterval(interval)
+  }, [isBlocked])
+
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    
+    if (checkIfBlocked()) {
+      setError(`Too many failed attempts. Try again in ${formatTime(remainingTime)}`)
+      return
+    }
+
+    if (!username.trim() || !password.trim()) {
+      setError('Please enter both username and password')
+      return
+    }
+
+    setLoading(true)
+
+    setTimeout(() => {
+      const user = VALID_USERS.find(
+        u => u.name.toLowerCase() === username.toLowerCase() && u.password === password
+      )
+
+      if (user) {
+        saveLoginAttempts({ count: 0, blockedUntil: null })
+        onLogin(user.name)
+      } else {
+        const attempts = getLoginAttempts()
+        const newCount = attempts.count + 1
+
+        if (newCount >= MAX_ATTEMPTS) {
+          const blockedUntil = Date.now() + BLOCK_DURATION
+          saveLoginAttempts({ count: newCount, blockedUntil })
+          setIsBlocked(true)
+          setRemainingTime(BLOCK_DURATION / 1000)
+          setError(`Too many failed attempts. Access blocked for 5 minutes.`)
+        } else {
+          saveLoginAttempts({ count: newCount, blockedUntil: null })
+          setError(`Invalid username or password (${newCount}/${MAX_ATTEMPTS} attempts)`)
+        }
+      }
+      setLoading(false)
+    }, 500)
   }
 
   return (
@@ -151,14 +280,48 @@ function LoginForm({ onLogin }) {
               onChange={(e) => setUsername(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter your username"
+              disabled={loading || isBlocked}
               required
             />
           </div>
+          <div className="mb-6">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              Password
+            </label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter your password"
+              disabled={loading || isBlocked}
+              required
+            />
+          </div>
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md text-sm">
+              {error}
+            </div>
+          )}
+          {isBlocked && remainingTime > 0 && (
+            <div className="mb-4 p-3 bg-orange-100 text-orange-700 rounded-md text-sm font-semibold text-center">
+              🔒 Blocked for {formatTime(remainingTime)}
+            </div>
+          )}
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition"
+            disabled={loading || isBlocked}
+            className={`w-full py-2 px-4 rounded-md transition flex items-center justify-center gap-2 ${
+              loading || isBlocked
+                ? 'bg-gray-400 cursor-not-allowed' 
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            }`}
           >
-            Login
+            {loading && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            )}
+            {loading ? 'Logging in...' : isBlocked ? 'Access Blocked' : 'Login'}
           </button>
         </form>
       </div>
