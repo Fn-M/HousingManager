@@ -216,7 +216,7 @@ export default function PropertyDetails({ onUpdate }) {
   }
 
   const toggleExpand = () => {
-    setIsExpanded(!isExpanded)
+    setIsExpanded(!isExpanded) 
   }
 
   const buildCommentTree = (comments) => {
