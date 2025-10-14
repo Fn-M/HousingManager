@@ -1,7 +1,7 @@
 import axios from 'axios'
 
-const PROD_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://byyagzyd94.execute-api.eu-west-1.amazonaws.com/prod'
-const API_KEY = import.meta.env.VITE_API_KEY || 'b61nzR5XEC2oGImwKSAwr1P74QNFz9xz3RMJniOc'
+const PROD_BASE_URL = import.meta.env.VITE_API_BASE_URL
+const API_KEY = import.meta.env.VITE_API_KEY
 
 // In dev, use the Vite proxy to bypass CORS; in prod, hit the real URL
 const baseURL = import.meta.env.DEV ? '/api' : PROD_BASE_URL
@@ -14,31 +14,11 @@ export const api = axios.create({
   },
 })
 
-// Log all outgoing requests (redact API key)
-api.interceptors.request.use((config) => {
-  const redactedHeaders = { ...config.headers }
-  const key = redactedHeaders?.['x-api-key'] || redactedHeaders?.common?.['x-api-key']
-  if (key) {
-    const str = String(key)
-    const last4 = str.slice(-4)
-    if (redactedHeaders['x-api-key']) redactedHeaders['x-api-key'] = `***${last4}`
-    if (redactedHeaders.common && redactedHeaders.common['x-api-key']) redactedHeaders.common['x-api-key'] = `***${last4}`
-  }
-  return config
-})
-
 // Log failed responses
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    const res = err.response
-    console.warn('[API Error]', {
-      method: err.config?.method?.toUpperCase(),
-      url: (err.config?.baseURL || '') + (err.config?.url || ''),
-      status: res?.status,
-      statusText: res?.statusText,
-      data: res?.data,
-    })
+    console.error('API Error:', err.response?.status, err.response?.data)
     return Promise.reject(err)
   }
 )
@@ -46,7 +26,6 @@ api.interceptors.response.use(
 function parseBody(data) {
   if (Array.isArray(data)) return data
   if (data == null) return []
-  // API Gateway often wraps payload in { body: "...json..." }
   const body = typeof data === 'string' ? data : data.body
   if (typeof body === 'string') {
     try { return JSON.parse(body) } catch { return [] }
@@ -70,7 +49,6 @@ function normalize(item) {
     firstPhoto: item.Picture ?? item.firstPhoto ?? '',
     description: item.Description ?? item.description ?? '',
     status: item.Status ?? item.status ?? '',
-    // Adicione outros campos extras conforme necessário
     ...item
   }
 }
@@ -84,24 +62,25 @@ export const Ads = {
 
   get: async (id) => {
     const res = await api.get(`/ads/${id}`)
-    console.log('🔍 RAW API response for GET /ads/${id}:', res.data)
-    console.log('🔍 res.data type:', typeof res.data)
-    console.log('🔍 res.data.body?:', res.data.body)
     
-    // Se a resposta vier wrapped em { body: "{...json...}" }
     let data = res.data
     if (typeof data.body === 'string') {
       try {
         data = JSON.parse(data.body)
-        console.log('✅ Parsed body:', data)
       } catch (err) {
-        console.error('❌ Failed to parse body:', err)
+        console.error('Failed to parse response body:', err)
       }
     }
     
-    const normalized = normalize(data)
-    console.log('✅ Normalized data:', normalized)
-    return normalized
+    if (Array.isArray(data)) {
+      const found = data.find(item => String(item.FundaId) === String(id))
+      if (!found) {
+        throw new Error(`Property with ID ${id} not found`)
+      }
+      data = found
+    }
+    
+    return normalize(data)
   },
 
   create: async (ad) => {
@@ -140,7 +119,7 @@ export const Ads = {
   deleteAllPictures: async (adId) => {
     const pictures = await Ads.getPictures(adId)
     const deletePromises = pictures
-      .filter(pic => !pic.isFirstPhoto) // Não apaga a firstPhoto
+      .filter(pic => !pic.isFirstPhoto)
       .map(pic => Ads.deletePicture(adId, pic.PictureId))
     await Promise.all(deletePromises)
     return true

@@ -1,11 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-const USERS = [
-  { name: 'Fábio', password: 'fabio123' },
-  { name: 'Melissa', password: 'melissa123' }
-]
-
+const USERS = JSON.parse(import.meta.env.VITE_USERS || '[]')
 
 export default function Login({ setUser }) {
   const [name, setName] = useState('')
@@ -22,7 +18,7 @@ export default function Login({ setUser }) {
       if (setUser) setUser(user.name)
       navigate('/')
     } else {
-  setError('Incorrect username or password.')
+      setError('Incorrect username or password.')
     }
   }
 
