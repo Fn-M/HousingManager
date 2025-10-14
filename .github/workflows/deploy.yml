@@ -30,6 +30,9 @@ jobs:
           VITE_API_KEY: ${{ secrets.VITE_API_KEY }}
           VITE_USERS: ${{ secrets.VITE_USERS }}
         run: npm run build
+      
+      - name: Add .nojekyll file
+        run: touch dist/.nojekyll
         
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
