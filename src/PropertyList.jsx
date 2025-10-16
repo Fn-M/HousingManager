@@ -1,233 +1,347 @@
-import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useMemo, useRef, useEffect } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import DatePicker, { registerLocale } from 'react-datepicker'
+import "react-datepicker/dist/react-datepicker.css"
+import { FaEuroSign, FaHome, FaBed, FaBolt, FaSort, FaSortUp, FaSortDown, FaTimes } from 'react-icons/fa'
+import { Ads } from './services/api'
+import { enGB } from 'date-fns/locale'
+import AddPropertyModal from './AddPropertyModal'
+registerLocale('en-GB', enGB)
 
-export default function PropertyList({ properties, loading, error, onUpdate }) {
-  const [searchTerm, setSearchTerm] = useState('')
-  const [sortBy, setSortBy] = useState('price')
-  const [sortOrder, setSortOrder] = useState('asc')
-  const [statusFilter, setStatusFilter] = useState('')
 
-  const filteredAndSortedProperties = useMemo(() => {
-    let filtered = properties.filter(property => {
-      const matchesSearch = !searchTerm || 
-        property.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        property.location?.toLowerCase().includes(searchTerm.toLowerCase())
-      
-      const matchesStatus = !statusFilter || property.status === statusFilter
-      
-      return matchesSearch && matchesStatus
-    })
+const SortableHeader = ({ children, sortKey, sortConfig, setSortConfig }) => {
+  const isSorted = sortConfig.key === sortKey
+  const direction = isSorted ? sortConfig.direction : null
 
-    return filtered.sort((a, b) => {
-      let aValue = a[sortBy]
-      let bValue = b[sortBy]
-      
-      if (sortBy === 'price' || sortBy === 'space' || sortBy === 'terrain') {
-        aValue = parseFloat(aValue) || 0
-        bValue = parseFloat(bValue) || 0
-      }
-      
-      if (typeof aValue === 'string') {
-        aValue = aValue.toLowerCase()
-        bValue = bValue?.toLowerCase() || ''
-      }
-      
-      if (sortOrder === 'asc') {
-        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
-      } else {
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
-      }
-    })
-  }, [properties, searchTerm, sortBy, sortOrder, statusFilter])
-
-  const getStatusColor = (status) => {
-    const colors = {
-      'view-booked': 'bg-purple-100 text-purple-800',
-      'offer-made': 'bg-yellow-100 text-yellow-800',
-      'viewed': 'bg-green-100 text-green-800',
-      'interested': 'bg-blue-100 text-blue-800',
-      'rejected': 'bg-red-100 text-red-800'
+  const handleClick = () => {
+    let newDirection = 'ascending'
+    if (isSorted && sortConfig.direction === 'ascending') {
+      newDirection = 'descending'
     }
-    return colors[status] || 'bg-gray-100 text-gray-800'
-  }
-
-  const getStatusLabel = (status) => {
-    const labels = {
-      'view-booked': 'View booked',
-      'offer-made': 'Offer made',
-      'viewed': 'Viewed',
-      'interested': 'Interested',
-      'rejected': 'Rejected'
-    }
-    return labels[status] || status
-  }
-
-  const uniqueStatuses = [...new Set(properties.map(p => p.status).filter(Boolean))]
-
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading properties...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="max-w-7xl mx-auto p-6">
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          <strong>Error:</strong> {error}
-        </div>
-        <button 
-          onClick={onUpdate}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          Retry
-        </button>
-      </div>
-    )
+    setSortConfig({ key: sortKey, direction: newDirection })
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      {/* Search and Filters */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name or location..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Sort by</label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="price">Price</option>
-              <option value="name">Name</option>
-              <option value="location">Location</option>
-              <option value="space">Living Area</option>
-              <option value="terrain">Plot Area</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Order</label>
-            <select
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="asc">Ascending</option>
-              <option value="desc">Descending</option>
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Statuses</option>
-              {uniqueStatuses.map(status => (
-                <option key={status} value={status}>{getStatusLabel(status)}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+    <th
+      onClick={handleClick}
+      className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+    >
+      <div className="flex items-center gap-2">
+        {children}
+        {isSorted ? (
+          direction === 'ascending' ? <FaSortUp /> : <FaSortDown />
+        ) : (
+          <FaSort className="text-gray-300" />
+        )}
       </div>
+    </th>
+  )
+}
 
-      {/* Results Summary */}
-      <div className="mb-6">
-        <p className="text-gray-600">
-          Showing {filteredAndSortedProperties.length} of {properties.length} properties
-        </p>
-      </div>
+const MultiSelectFilter = ({ options, selected, onChange, placeholder }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const filterRef = useRef(null)
 
-      {/* Properties Grid */}
-      {filteredAndSortedProperties.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">No properties found matching your criteria.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredAndSortedProperties.map((property) => (
-            <div key={property.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-              {property.Picture && (
-                <img
-                  src={property.Picture}
-                  alt={property.name}
-                  className="w-full h-48 object-cover"
-                />
-              )}
-              
-              <div className="p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-lg font-semibold text-gray-800 line-clamp-2">
-                    {property.name}
-                  </h3>
-                  {property.status && (
-                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(property.status)}`}>
-                      {getStatusLabel(property.status)}
-                    </span>
-                  )}
-                </div>
-                
-                <p className="text-gray-600 text-sm mb-2">{property.location}</p>
-                
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-xl font-bold text-blue-600">
-                    €{property.price?.toLocaleString()}
-                  </span>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-2 text-sm text-gray-600 mb-4">
-                  {property.space && (
-                    <div>
-                      <span className="font-medium">Living:</span> {property.space}m²
-                    </div>
-                  )}
-                  {property.terrain && (
-                    <div>
-                      <span className="font-medium">Plot:</span> {property.terrain}m²
-                    </div>
-                  )}
-                  {property.rooms && (
-                    <div>
-                      <span className="font-medium">Rooms:</span> {property.rooms}
-                    </div>
-                  )}
-                  {property.energyClass && (
-                    <div>
-                      <span className="font-medium">Energy:</span> {property.energyClass}
-                    </div>
-                  )}
-                </div>
-                
-                <Link
-                  to={`/details/${property.id}`}
-                  className="block w-full text-center bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 transition"
-                >
-                  View Details
-                </Link>
-              </div>
-            </div>
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setIsOpen(false)
+      }
+    }
+    // Adiciona o listener quando o componente monta
+    document.addEventListener('mousedown', handleClickOutside)
+    // Remove o listener quando o componente desmonta
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, []) // O array vazio garante que o efeito só corre na montagem e desmontagem
+
+  const handleSelect = (option) => {
+    const newSelected = selected.includes(option)
+      ? selected.filter(item => item !== option)
+      : [...selected, option]
+    onChange(newSelected)
+  }
+
+  return (
+    <div className="relative" ref={filterRef}>
+      <button onClick={() => setIsOpen(!isOpen)} className="w-full sm:w-64 p-2 border rounded-md text-left bg-white">
+        {selected.length > 0 ? `${selected.length} cities selected` : placeholder}
+      </button>
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-full sm:w-64 bg-white border rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">
+          {options.map(option => (
+            <label key={option} className="flex items-center gap-2 p-2 hover:bg-gray-100 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selected.includes(option)}
+                onChange={() => handleSelect(option)}
+              />
+              {option}
+            </label>
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+
+export default function PropertyList({ properties, loading, error, onUpdate }) {
+  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'ascending' })
+  const [editingDateForId, setEditingDateForId] = useState(null)
+  const [tempDate, setTempDate] = useState(null)
+  const [selectedCities, setSelectedCities] = useState([])
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const navigate = useNavigate()
+
+  const uniqueCities = useMemo(() => {
+    const cities = new Set(
+      properties
+        .map(p => p.location?.split(' ').pop())
+        .filter(Boolean)
+    )
+    return Array.from(cities).sort()
+  }, [properties])
+
+  const filteredAndSortedProperties = useMemo(() => {
+    let filteredItems = [...properties]
+
+    if (selectedCities.length > 0) {
+      filteredItems = filteredItems.filter(p => {
+        const city = p.location?.split(' ').pop()
+        return city && selectedCities.includes(city)
+      })
+    }
+
+    if (sortConfig.key) {
+      filteredItems.sort((a, b) => {
+        let aValue = a[sortConfig.key]
+        let bValue = b[sortConfig.key]
+
+        if (sortConfig.key === 'viewDate') {
+          aValue = a.viewDate ? new Date(a.viewDate).getTime() : Infinity
+          bValue = b.viewDate ? new Date(b.viewDate).getTime() : Infinity
+        }
+
+        if (sortConfig.key === 'energyClass') {
+          const getEnergyScore = (energyClass) => {
+            if (!energyClass || typeof energyClass !== 'string') return Infinity
+            
+            const normalized = energyClass.toUpperCase().trim()
+            const letter = normalized.charAt(0)
+            const pluses = (normalized.match(/\+/g) || []).length
+            
+            const letterScores = { G: 7, F: 6, E: 5, D: 4, C: 3, B: 2, A: 1 }
+            
+            if (!(letter in letterScores)) return Infinity
+            
+            // Lower score is better. Each '+' makes it better.
+            return letterScores[letter] - (pluses * 0.1)
+          }
+
+          aValue = getEnergyScore(a.energyClass)
+          bValue = getEnergyScore(b.energyClass)
+        }
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'ascending' ? -1 : 1
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'ascending' ? 1 : -1
+        }
+        return 0
+      })
+    }
+    return filteredItems
+  }, [properties, sortConfig, selectedCities])
+
+  const handleRowClick = (id) => {
+    navigate(`/details/${id}`)
+  }
+
+  const handleDateChange = async (propertyId, date) => {
+    try {
+      const property = properties.find(p => p.id === propertyId);
+      const updatePayload = {
+        viewDate: date ? date.toISOString() : null
+      };
+
+      // If setting a date, automatically set status to 'view-booked'
+      if (date) {
+        updatePayload.status = 'view-booked';
+      } 
+      // If clearing the date and current status is 'view-booked', clear the status
+      else if (property && (property.status === 'view-booked' || property.Status === 'view-booked')) {
+        updatePayload.status = '';
+      }
+
+      await Ads.update(propertyId, updatePayload);
+      setEditingDateForId(null);
+      if (onUpdate) {
+        onUpdate(); // Refetch all properties to get the latest data
+      }
+    } catch (err) {
+      console.error("Failed to update view date:", err);
+      alert("Failed to update view date.");
+    }
+  }
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Set Date'
+    return new Date(dateString).toLocaleString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  if (loading) return <div className="p-6 text-center">Loading properties...</div>
+  if (error) return <div className="p-6 text-center text-red-500">Error: {error}</div>
+
+  return (
+    <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+      <AddPropertyModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSuccess={onUpdate}
+      />
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+        <MultiSelectFilter
+          options={uniqueCities}
+          selected={selectedCities}
+          onChange={setSelectedCities}
+          placeholder="Filter by City"
+        />
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+        >
+          Add New Property
+        </button>
+      </div>
+
+      <div className="overflow-x-auto shadow-md rounded-lg">
+        <table className="min-w-full divide-y divide-gray-200 bg-white">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="w-28"></th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+              <SortableHeader sortKey="location" sortConfig={sortConfig} setSortConfig={setSortConfig}>
+                City
+              </SortableHeader>
+              <SortableHeader sortKey="price" sortConfig={sortConfig} setSortConfig={setSortConfig}>
+                <FaEuroSign title="Price" />
+              </SortableHeader>
+              <SortableHeader sortKey="space" sortConfig={sortConfig} setSortConfig={setSortConfig}>
+                <FaHome title="Living Space" />
+              </SortableHeader>
+              <SortableHeader sortKey="rooms" sortConfig={sortConfig} setSortConfig={setSortConfig}>
+                <FaBed title="Bedrooms" />
+              </SortableHeader>
+              <SortableHeader sortKey="energyClass" sortConfig={sortConfig} setSortConfig={setSortConfig}>
+                <FaBolt title="Energy Class" />
+              </SortableHeader>
+              <SortableHeader sortKey="viewDate" sortConfig={sortConfig} setSortConfig={setSortConfig}>
+                View Date
+              </SortableHeader>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {filteredAndSortedProperties.map((prop) => (
+              <tr
+                key={prop.id}
+                onClick={() => handleRowClick(prop.id)}
+                className="hover:bg-gray-50 cursor-pointer"
+              >
+                <td className="p-2" onClick={(e) => e.stopPropagation()}>
+                  <Link to={`/details/${prop.id}`}>
+                    <img
+                      src={prop.firstPhoto}
+                      alt={prop.name}
+                      className="w-28 h-20 object-cover rounded-md"
+                    />
+                  </Link>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <a
+                    href={prop.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-sm font-medium text-blue-600 hover:underline"
+                  >
+                    {prop.name}
+                  </a>
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                  {prop.location ? prop.location.split(' ').pop() : 'N/A'}
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                  {prop.price ? `€${prop.price.toLocaleString()}` : 'N/A'}
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                  {prop.space ? `${prop.space} m²` : 'N/A'}
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                  {prop.rooms || 'N/A'}
+                </td>
+                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                  {prop.energyClass || 'N/A'}
+                </td>
+                <td
+                  className="px-4 py-4 whitespace-nowrap text-sm text-gray-700"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {editingDateForId === prop.id ? (
+                    <div className="flex items-start gap-2">
+                      <DatePicker
+                        selected={tempDate}
+                        onChange={(date) => setTempDate(date)}
+                        showTimeSelect
+                        isClearable
+                        shouldCloseOnSelect={false}
+                        dateFormat="Pp"
+                        className="w-48 p-1 border rounded-md"
+                        autoFocus
+                        locale="en-GB" // Use 24-hour format
+                        timeFormat="HH:mm" // Explicitly set 24-hour format
+                        timeIntervals={15} // Set 15-minute intervals
+                      />
+                      <div className="flex flex-col gap-1">
+                        <button
+                          onClick={() => handleDateChange(prop.id, tempDate)}
+                          className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingDateForId(null)}
+                          className="px-2 py-1 text-xs bg-gray-400 text-white rounded hover:bg-gray-500"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setTempDate(prop.viewDate ? new Date(prop.viewDate) : null)
+                        setEditingDateForId(prop.id)
+                      }}
+                      className="text-blue-600 hover:underline"
+                    >
+                      {formatDate(prop.viewDate)}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

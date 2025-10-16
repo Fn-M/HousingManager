@@ -3,31 +3,52 @@ import axios from 'axios'
 const PROD_BASE_URL = import.meta.env.VITE_API_BASE_URL
 const API_KEY = import.meta.env.VITE_API_KEY
 
-const baseURL = import.meta.env.DEV ? '/api' : PROD_BASE_URL
-
-export const api = axios.create({
-  baseURL,
-  headers: {
-    'Content-Type': 'application/json',
-    'x-api-key': API_KEY,
-  },
+const api = axios.create({
+  baseURL: PROD_BASE_URL
 })
 
-// Remove error logging
-api.interceptors.response.use(
-  (res) => res,
-  (err) => Promise.reject(err)
+// Adiciona um interceptor que injeta a API key em cada requisição
+api.interceptors.request.use(
+  (config) => {
+    if (!API_KEY) {
+      console.error('VITE_API_KEY is not defined. Please check your .env file and restart the server.')
+    }
+    config.headers['x-api-key'] = API_KEY
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
 )
 
 function parseBody(data) {
-  if (Array.isArray(data)) return data
-  if (data == null) return []
-  const body = typeof data === 'string' ? data : data.body
-  if (typeof body === 'string') {
-    try { return JSON.parse(body) } catch { return [] }
+  if (data == null) return null;
+
+  if (Array.isArray(data)) return data;
+
+  if (data.items && Array.isArray(data.items)) return data.items;
+
+  if (data.body && typeof data.body === 'string') {
+    try {
+      return JSON.parse(data.body);
+    } catch {
+      return null;
+    }
   }
-  if (Array.isArray(data.items)) return data.items
-  return []
+  
+  if (typeof data === 'string') {
+    try {
+      return JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof data === 'object' && !Array.isArray(data)) {
+    return data;
+  }
+
+  return null;
 }
 
 function normalize(item) {
@@ -45,6 +66,7 @@ function normalize(item) {
     firstPhoto: item.Picture ?? item.firstPhoto ?? '',
     description: item.Description ?? item.description ?? '',
     status: item.Status ?? item.status ?? '',
+    viewDate: item.ViewDate ?? item.viewDate ?? null,
     ...item
   }
 }
@@ -53,97 +75,57 @@ export const Ads = {
   list: async () => {
     const res = await api.get('/ads')
     const raw = parseBody(res.data)
-    return raw.map(normalize).filter(Boolean)
+    return Array.isArray(raw) ? raw.map(normalize).filter(Boolean) : []
   },
 
   get: async (id) => {
     const res = await api.get(`/ads/${id}`)
     
-    let data = res.data
-    if (typeof data.body === 'string') {
-      try {
-        data = JSON.parse(data.body)
-      } catch (err) {
-        // Silent
-      }
+    const rawData = parseBody(res.data)
+    
+    const item = Array.isArray(rawData) ? rawData[0] : rawData;
+
+    if (!item) {
+      throw new Error(`Property with ID ${id} not found`)
     }
     
-    if (Array.isArray(data)) {
-      const found = data.find(item => String(item.FundaId) === String(id))
-      if (!found) {
-        throw new Error(`Property with ID ${id} not found`)
-      }
-      data = found
-    }
-    
-    return normalize(data)
+    return normalize(item)
   },
 
   create: async (ad) => {
-    const res = await api.post('/ads', ad)
-    return normalize(res.data)
+    if (!ad || !ad.FundaId) {
+      throw new Error('FundaId is required to create a new property.')
+    }
+    
+    // Constrói o payload correto que o Lambda espera
+    const payload = {
+      id: ad.FundaId,
+      viewDate: ad.viewDate,
+      link: ad.url // Adiciona o URL no campo 'link'
+    };
+
+    // Envia o payload com a chave "id" em vez de "FundaId"
+    const res = await api.post('/ads', payload)
+    return parseBody(res.data)
   },
 
   update: async (id, ad) => {
     const res = await api.put(`/ads/${id}`, ad)
-    return normalize(res.data)
-  },
-
-  delete: async (id) => {
-    try {
-      await api.delete(`/ads/${id}/comments`)
-    } catch (err) {
-      // Continue
-    }
-    
-    try {
-      await api.delete(`/ads/${id}/pictures`)
-    } catch (err) {
-      // Continue
-    }
-    
-    await api.delete(`/ads/${id}`)
-  },
-
-  getPictures: async (adId) => {
-    const res = await api.get(`/ads/${adId}/pictures`)
     return parseBody(res.data)
   },
 
-  deletePicture: async (adId, pictureId) => {
-    const res = await api.delete(`/ads/${adId}/pictures/${pictureId}`, {
-      headers: {
-        'x-api-key': API_KEY
-      }
-    })
-    return res.data
-  },
-
-  deleteAllPictures: async (adId) => {
-    const pictures = await Ads.getPictures(adId)
-    const deletePromises = pictures
-      .filter(pic => !pic.isFirstPhoto)
-      .map(pic => Ads.deletePicture(adId, pic.PictureId))
-    await Promise.all(deletePromises)
-    return true
-  },
-
-  getComments: async (adId) => {
-    const res = await api.get(`/ads/${adId}/comments`)
+  getPictures: async (id) => {
+    const res = await api.get(`/pictures/${id}`)
     return parseBody(res.data)
   },
 
-  addComment: async (adId, comment) => {
-    const res = await api.post(`/ads/${adId}/comments`, comment)
-    return res.data
+  deletePicture: async (id, pictureId) => {
+    const res = await api.delete(`/pictures/${id}/${pictureId}`)
+    return parseBody(res.data)
   },
 
-  deleteAllComments: async (adId) => {
-    const res = await api.delete(`/ads/${adId}/comments`, {
-      headers: {
-        'x-api-key': API_KEY
-      }
-    })
-    return res.data
+  setFirstPicture: async (id, pictureId) => {
+    const res = await api.put(`/pictures/${id}/${pictureId}`)
+    return parseBody(res.data)
   }
 }

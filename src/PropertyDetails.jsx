@@ -1,6 +1,9 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { Ads } from './services/api'
+import DatePicker from 'react-datepicker'
+import "react-datepicker/dist/react-datepicker.css"
+import { FaPencilAlt } from 'react-icons/fa'
 
 export default function PropertyDetails({ onUpdate, onDelete }) {
   const { id } = useParams()
@@ -27,6 +30,9 @@ export default function PropertyDetails({ onUpdate, onDelete }) {
   const [customStatus, setCustomStatus] = useState('')
   const [showCustomInput, setShowCustomInput] = useState(false)
   const [savingStatus, setSavingStatus] = useState(false)
+  const [editingViewDate, setEditingViewDate] = useState(false)
+  const [tempDate, setTempDate] = useState(null) // Temporary state for date editing
+  const [savingViewDate, setSavingViewDate] = useState(false)
   const newCommentRef = useRef(null)
   const [pictures, setPictures] = useState([])
   const [deletingPictureId, setDeletingPictureId] = useState(null)
@@ -199,6 +205,45 @@ export default function PropertyDetails({ onUpdate, onDelete }) {
     setStatusValue(property?.status || '')
   }
 
+  const handleSaveViewDate = async (date) => {
+    setSavingViewDate(true)
+    try {
+      const updatePayload = {
+        viewDate: date ? date.toISOString() : null
+      };
+
+      // If setting a date, automatically set status to 'view-booked'
+      if (date) {
+        updatePayload.status = 'view-booked';
+      } 
+      // If clearing the date and current status is 'view-booked', clear the status
+      else if (property && (property.status === 'view-booked' || property.Status === 'view-booked')) {
+        updatePayload.status = '';
+      }
+
+      await Ads.update(id, updatePayload);
+      
+      // Manually update local state to reflect changes immediately
+      setProperty(prev => ({ 
+        ...prev, 
+        viewDate: updatePayload.viewDate,
+        ...(updatePayload.status !== undefined && { status: updatePayload.status })
+      }));
+      
+      if (updatePayload.status !== undefined) {
+        setStatusValue(updatePayload.status);
+      }
+
+      setEditingViewDate(false);
+      if (onUpdate) onUpdate();
+
+    } catch (err) {
+      alert('Failed to update view date: ' + err.message)
+    } finally {
+      setSavingViewDate(false)
+    }
+  }
+
   const handleAddComment = async () => {
     if (!commentText.trim()) {
       setCommentError('Comment cannot be empty')
@@ -325,15 +370,19 @@ export default function PropertyDetails({ onUpdate, onDelete }) {
     }))
   }
 
-  const formatDate = (dateString) => {
+  const formatDate = (dateString, includeTime = true) => {
+    if (!dateString) return 'Not set'
     try {
-      return new Date(dateString).toLocaleDateString('en-GB', {
+      const options = {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
+      }
+      if (includeTime) {
+        options.hour = '2-digit'
+        options.minute = '2-digit'
+      }
+      return new Date(dateString).toLocaleDateString('en-GB', options)
     } catch {
       return dateString
     }
@@ -478,11 +527,11 @@ export default function PropertyDetails({ onUpdate, onDelete }) {
                 )}
 
                 {!isExpanded && (
-                  <div className="relative w-full h-96">
+                  <div className="relative w-full h-96 bg-gray-100 rounded-lg shadow-lg">
                     <img
                       src={sortedPictures[currentImageIndex].PictureUrl}
                       alt={`Property ${currentImageIndex + 1}`}
-                      className="w-full h-96 object-cover rounded-lg shadow-lg"
+                      className="w-full h-full object-contain rounded-lg"
                     />
                     
                     <button
@@ -522,14 +571,14 @@ export default function PropertyDetails({ onUpdate, onDelete }) {
                   </div>
                 )}
 
-                <div className="flex gap-2 mt-4 overflow-x-auto">
+                <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
                   {sortedPictures.map((pic, idx) => (
                     <img
                       key={pic.PictureId}
                       src={pic.PictureUrl}
                       alt={`Thumbnail ${idx + 1}`}
                       onClick={() => setCurrentImageIndex(idx)}
-                      className={`w-20 h-20 object-cover rounded cursor-pointer ${idx === currentImageIndex ? 'ring-4 ring-blue-500' : 'opacity-60 hover:opacity-100'}`}
+                      className={`w-24 h-24 object-contain bg-gray-100 rounded cursor-pointer ${idx === currentImageIndex ? 'ring-4 ring-blue-500' : 'opacity-70 hover:opacity-100'}`}
                     />
                   ))}
                 </div>
@@ -562,6 +611,61 @@ export default function PropertyDetails({ onUpdate, onDelete }) {
                 <p className="text-lg font-semibold">{property.energyClass || 'N/A'}</p>
               </div>
               
+              <div className="md:col-span-2">
+                <p className="text-sm text-gray-500 mb-2">View Date</p>
+                {editingViewDate ? (
+                  <div className="flex items-start gap-4">
+                    <DatePicker
+                      selected={tempDate}
+                      onChange={(date) => setTempDate(date)}
+                      showTimeSelect
+                      isClearable
+                      shouldCloseOnSelect={false}
+                      dateFormat="Pp"
+                      className="px-3 py-2 border rounded w-full max-w-xs"
+                      disabled={savingViewDate}
+                      inline
+                    />
+                    <div className="flex flex-col gap-2">
+                      <button
+                        onClick={() => handleSaveViewDate(tempDate)}
+                        disabled={savingViewDate}
+                        className={`px-4 py-2 rounded flex items-center justify-center gap-2 ${
+                          savingViewDate
+                            ? 'bg-gray-400 cursor-not-allowed'
+                            : 'bg-green-600 hover:bg-green-700 text-white'
+                        }`}
+                      >
+                        {savingViewDate ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => setEditingViewDate(false)}
+                        disabled={savingViewDate}
+                        className="px-4 py-2 bg-gray-400 text-white rounded hover:bg-gray-500 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 items-center">
+                    <span className="px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800">
+                      {formatDate(property.viewDate)}
+                    </span>
+                    <button 
+                      onClick={() => {
+                        setTempDate(property.viewDate ? new Date(property.viewDate) : null)
+                        setEditingViewDate(true)
+                      }} 
+                      className="p-2 text-gray-500 rounded-full hover:bg-gray-200 hover:text-gray-700 transition"
+                      title={property.viewDate ? 'Edit Date' : 'Set Date'}
+                    >
+                      <FaPencilAlt />
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div className="md:col-span-2">
                 <p className="text-sm text-gray-500 mb-2">Status</p>
                 {editingStatus ? (
@@ -645,8 +749,12 @@ export default function PropertyDetails({ onUpdate, onDelete }) {
                     ) : (
                       <span className="text-gray-400">No status</span>
                     )}
-                    <button onClick={() => setEditingStatus(true)} className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
-                      {statusValue ? 'Edit' : 'Add Status'}
+                    <button 
+                      onClick={() => setEditingStatus(true)} 
+                      className="p-2 text-gray-500 rounded-full hover:bg-gray-200 hover:text-gray-700 transition"
+                      title={statusValue ? 'Edit Status' : 'Add Status'}
+                    >
+                      <FaPencilAlt />
                     </button>
                   </div>
                 )}
